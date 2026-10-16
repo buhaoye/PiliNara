@@ -23,11 +23,9 @@
 <br/>
 
 ## 项目说明
-- 本项目PiliNara是基于[PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus)进行修改的,做了一些自用的改动.
-- 本仓库保留了PiliPlus的所有功能,并在此基础上进行了部分自用的优化和调整.支持导入PiliPlus的设置和数据，也应该支持了导出设置和数据到PiliPlus.
-- 本项目会定期同步PiliPlus的更新,并在此基础上进行修改和优化.
+- 本项目PiliNara fork是基于[PiliNara](https://github.com/Starfallan/PiliNara)进行修改的,做了一些自用的改动.
+- 本仓库保留了PiliNara的所有功能,并在此基础上进行了部分自用的优化和调整.支持导入PiliNara的设置和数据，也应该支持了导出设置和数据到PiliNara.
 - 本项目仅供个人学习和测试使用，目前只打包了安卓版本,如有需要请自行Fork后编译.
-- 有啥需要的功能或者想法欢迎提issue或者PR,我会尽量抽时间进行开发和完善.
 - 本人开发水平有限，可能存在一些bug和不完善的地方，欢迎提交issue和PR.
 
 在此致敬原作者和上游作者的无私奉献。如有侵权请联系删除。

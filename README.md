@@ -10,7 +10,7 @@
 
 </div>
 </div>
-    <p>基于PiliPlus做了一些自用修改</p>
+    <p>在pilinara的基础上改动了一些内容</p>
     
 <img src="assets/screenshots/510shots_so.png" width="32%" alt="home" />
 <img src="assets/screenshots/174shots_so.png" width="32%" alt="home" />

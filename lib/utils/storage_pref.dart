@@ -16,7 +16,7 @@ import 'package:PiliPlus/models/common/member/tab_type.dart';
 import 'package:PiliPlus/models/common/mine_tab_type.dart';
 import 'package:PiliPlus/models/common/msg/msg_unread_type.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
-import 'package:PiliPlus/models/common/rcmd_mode.dart';
+import 'package:PiliPlus/models/common/rcmd_source.dart';
 import 'package:PiliPlus/models/common/reply/reply_sort_type.dart';
 import 'package:PiliPlus/models/common/sponsor_block/segment_type.dart';
 import 'package:PiliPlus/models/common/sponsor_block/skip_type.dart';
@@ -24,15 +24,13 @@ import 'package:PiliPlus/models/common/super_chat_time_type.dart';
 import 'package:PiliPlus/models/common/super_chat_type.dart';
 import 'package:PiliPlus/models/common/super_resolution_type.dart';
 import 'package:PiliPlus/models/common/theme/theme_type.dart';
-import 'package:PiliPlus/models/common/video/audio_quality.dart';
+import 'package:PiliPlus/models/common/video/base_quality.dart';
 import 'package:PiliPlus/models/common/video/cdn_type.dart';
-import 'package:PiliPlus/models/common/video/live_quality.dart';
 import 'package:PiliPlus/models/common/video/subtitle_pref_type.dart';
 import 'package:PiliPlus/models/common/video/video_decode_type.dart';
-import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models/user/danmaku_rule.dart';
 import 'package:PiliPlus/models/user/info.dart';
-import 'package:PiliPlus/pages/setting/pages/fullscreen_sc_size.dart'
+import 'package:PiliPlus/pages/setting/pages/fullscreen_sc.dart'
     show kFullScreenSCWidth;
 import 'package:PiliPlus/plugin/pl_player/models/audio_output_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/bottom_progress_behavior.dart';
@@ -54,6 +52,16 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
+
+/// 关键词过滤规则列表的匹配入口，语义等价于逐项独立匹配、命中任一。
+extension RegExpListMatch on List<RegExp> {
+  bool hasMatch(String input) {
+    for (final rule in this) {
+      if (rule.hasMatch(input)) return true;
+    }
+    return false;
+  }
+}
 
 abstract final class Pref {
   static final Box _setting = GStorage.setting;
@@ -328,16 +336,18 @@ abstract final class Pref {
 
   static List<Pair<SegmentType, SkipType>> get blockSettings {
     final list = _setting.get(SettingBoxKey.blockSettings) as List?;
-    if (list == null || list.length != SegmentType.values.length) {
+    if (list == null || list.length > SegmentType.values.length) {
       return SegmentType.values
           .map((i) => Pair(first: i, second: SkipType.skipOnce))
           .toList();
     }
     return SegmentType.values
         .map(
-          (item) => Pair(
+          (item) => Pair<SegmentType, SkipType>(
             first: item,
-            second: SkipType.values[list[item.index]],
+            second: item.index < list.length
+                ? .values[list[item.index]]
+                : .skipOnce,
           ),
         )
         .toList();
@@ -520,14 +530,33 @@ abstract final class Pref {
   static bool get appRcmd =>
       _setting.get(SettingBoxKey.appRcmd, defaultValue: true);
 
-  /// 推荐流模式，首次读取时从旧 key appRcmd 迁移
-  static RcmdMode get rcmdMode {
-    final index = _setting.get(SettingBoxKey.rcmdMode);
-    if (index != null) {
-      return RcmdMode.values.elementAtOrNull(index) ?? RcmdMode.app;
+  static List<RcmdSource> get rcmdSources {
+    final stored = _setting.get(SettingBoxKey.rcmdSources);
+    if (stored is List) {
+      final sources = <RcmdSource>[];
+      for (final name in stored) {
+        final source = RcmdSource.values.where((e) => e.name == name).firstOrNull;
+        if (source != null && !sources.contains(source)) sources.add(source);
+      }
+      if (sources.isNotEmpty) return sources;
     }
-    // 旧版迁移：appRcmd true→App, false→Web
-    return appRcmd ? RcmdMode.app : RcmdMode.web;
+    // 本地旧模式的 2 是 App+Web，上游旧来源的 2 是 PC。
+    switch (_setting.get(SettingBoxKey.rcmdMode)) {
+      case 0: return [RcmdSource.app];
+      case 1: return [RcmdSource.web];
+      case 2: return [RcmdSource.app, RcmdSource.web];
+    }
+    final legacy = _setting.get(SettingBoxKey.rcmdSource);
+    if (legacy is int && legacy >= 0 && legacy < RcmdSource.values.length) {
+      return [RcmdSource.values[legacy]];
+    }
+    return [appRcmd ? RcmdSource.app : RcmdSource.web];
+  }
+
+  static Future<void> setRcmdSources(List<RcmdSource> sources) async {
+    if (sources.isEmpty) return;
+    await _setting.put(SettingBoxKey.rcmdSources,
+        sources.map((e) => e.name).toSet().toList());
   }
 
   static bool get removeBlockedRcmd =>
@@ -922,6 +951,9 @@ abstract final class Pref {
     defaultValue: true,
   );
 
+  static bool get enableScrollVolume =>
+      _setting.get(SettingBoxKey.enableScrollVolume, defaultValue: true);
+
   static bool get enableSlideFS =>
       _setting.get(SettingBoxKey.enableSlideFS, defaultValue: true);
 
@@ -1049,24 +1081,17 @@ abstract final class Pref {
   static String get banWordForDyn =>
       _setting.get(SettingBoxKey.banWordForDyn, defaultValue: '');
 
-  /// Helper method to parse ban word storage format into regex pattern
-  /// Supports both old (pipe-separated) and new (newline-separated) formats
-  /// Returns a regex pattern string with proper alternation
-  static String parseBanWordToRegex(String stored) {
-    if (stored.isEmpty) return '';
-
-    List<String> items;
-
-    // Check if it's the old pipe-separated format (no newlines)
+  /// 解析关键词存储串，返回列表项。
+  /// 支持旧格式（`|` 分隔）与新格式（`\n` 分隔）。
+  static List<String> parseBanWordItems(String stored) {
+    if (stored.isEmpty) return const [];
+    // 不含换行但含 `|`：可能是旧格式的多关键词，也可能是用户手写的一条正则
     if (!stored.contains('\n') && stored.contains('|')) {
-      // Old format: pipe-separated
-      // Heuristic: if it looks like multiple short items, it's old format
       final parts = stored
           .split('|')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
-
       if (parts.length > 1) {
         final hasComplexRegex = parts.any(
           (p) =>
@@ -1077,39 +1102,42 @@ abstract final class Pref {
               p.contains('^') ||
               p.contains('\$'),
         );
-
-        if (!hasComplexRegex) {
-          // Old format with simple keywords
-          items = parts;
-        } else {
-          // Single complex regex - use as-is
-          return stored;
-        }
+        // 含正则语法时整串视作一条正则，不拆
+        if (hasComplexRegex) return [stored];
       } else {
-        // Single item, keep as-is
-        return stored;
+        return [stored];
       }
-    } else {
-      // New format: newline-separated
-      items = stored
-          .split('\n')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
+      return parts;
     }
+    return stored
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
 
-    if (items.isEmpty) return '';
+  /// 逐项编译关键词为独立正则，命中任一即过滤。
+  /// 单项非法时只跳过该项，不影响同列表其他项。
+  static List<RegExp> compileBanWord(String stored) {
+    final rules = <RegExp>[];
+    for (final item in parseBanWordItems(stored)) {
+      try {
+        rules.add(RegExp(item, caseSensitive: false));
+      } on FormatException catch (e) {
+        debugPrint('Invalid ban word pattern ignored: $item ($e)');
+      }
+    }
+    return rules;
+  }
 
-    // Build regex by joining all patterns with alternation
-    return items
-        .map((item) {
-          // If the item contains '|' and isn't already grouped, wrap it
-          if (item.contains('|') && !item.startsWith('(')) {
-            return '($item)';
-          }
-          return item;
-        })
-        .join('|');
+  /// 单项是否可以编译为正则，与 [compileBanWord] 使用同一套选项。
+  static bool isBanWordPatternValid(String pattern) {
+    try {
+      RegExp(pattern, caseSensitive: false);
+      return true;
+    } on FormatException {
+      return false;
+    }
   }
 
   static bool get enableLog =>
@@ -1213,6 +1241,8 @@ abstract final class Pref {
   static double get sideBarThreshold =>
       (_setting.get(SettingBoxKey.sideBarThreshold, defaultValue: 600.0) as num)
           .toDouble();
+  static bool get hideSideBarLabel =>
+      _setting.get(SettingBoxKey.hideSideBarLabel, defaultValue: false);
 
   static bool get dynamicsShowAllFollowedUp => _setting.get(
     SettingBoxKey.dynamicsShowAllFollowedUp,
@@ -1371,34 +1401,15 @@ abstract final class Pref {
     };
   }
 
-  /// 直播流无后向缓冲，全部给前向（mpv 的 --demuxer-max-bytes 与
-  /// --demuxer-max-back-bytes）。未单独设置时保持旧实现的默认值：
-  /// 前向缓冲为 [bufferSize] 的两倍且不限制时长。
-  static Map<String, String> initLiveBuffer() => buildLiveBuffer(
-    sizeMb: liveBufferSize,
-    sec: liveBufferSec,
-    fallbackSizeMb: bufferSize,
-  );
-
-  /// 构造直播流使用的 mpv 额外参数。
-  ///
-  /// [sizeMb] 为前向缓冲大小（MB），小于等于 0 时使用
-  /// [fallbackSizeMb]（缺省为 [bufferSize]）的两倍；
-  /// [sec] 为缓冲时长上限（s），小于等于 0 时不限制。
-  @visibleForTesting
-  static Map<String, String> buildLiveBuffer({
-    double sizeMb = 0,
-    double sec = 0,
-    double? fallbackSizeMb,
-  }) {
-    final effectiveSizeMb = sizeMb > 0
-        ? sizeMb
-        : (fallbackSizeMb ?? bufferSize) * 2;
-    final buffer = <String, String>{
+  static Map<String, String> initLiveBuffer() {
+    final liveBufMb = liveBufferSize;
+    final effectiveSizeMb = liveBufMb > 0 ? liveBufMb : bufferSize * 2;
+    final buffer = {
       'cache': 'yes',
       'demuxer-max-bytes': (effectiveSizeMb * 0x100000).toStringAsFixed(0),
       'demuxer-max-back-bytes': '0',
     };
+    final sec = Pref.liveBufferSec;
     if (sec > 0) {
       buffer['cache-secs'] = sec.toStringAsFixed(3);
       buffer['demuxer-hysteresis-secs'] = (sec / 1.5).toStringAsFixed(3);
@@ -1513,20 +1524,15 @@ abstract final class Pref {
 
     value = _localCache.get(SettingBoxKey.buvid);
     if (value != null) {
-      _setting
-          .put(SettingBoxKey.buvid, value)
-          .whenComplete(() => _localCache.delete(SettingBoxKey.buvid));
-      return value;
-    }
-
-    if (value == null) {
-      buvid = value = LoginUtils.generateBuvid();
+      _setting.put(SettingBoxKey.buvid, value);
+      _localCache.delete(SettingBoxKey.buvid);
+    } else {
+      value = LoginUtils.generateBuvid();
+      GStorage.setting.put(SettingBoxKey.buvid, value);
     }
 
     return value;
   }
-
-  static set buvid(String value) => _setting.put(SettingBoxKey.buvid, value);
 
   static bool get showMemberShop =>
       _setting.get(SettingBoxKey.showMemberShop, defaultValue: false);
@@ -1547,6 +1553,15 @@ abstract final class Pref {
     SettingBoxKey.fullScreenSCWidth,
     defaultValue: kFullScreenSCWidth,
   );
+
+  static bool get enableFullScreenSC =>
+      _setting.get(SettingBoxKey.enableFullScreenSC, defaultValue: true);
+
+  static double get fullScreenSCOpacity =>
+      _setting.get(SettingBoxKey.fullScreenSCOpacity, defaultValue: 1.0);
+
+  static double get fullScreenSCScale =>
+      _setting.get(SettingBoxKey.fullScreenSCScale, defaultValue: 1.0);
 
   static bool get minimizeOnExit =>
       _setting.get(SettingBoxKey.minimizeOnExit, defaultValue: true);
@@ -1816,4 +1831,13 @@ abstract final class Pref {
 
   static bool get filterIntro =>
       _setting.get(SettingBoxKey.filterIntro, defaultValue: false);
+
+  static int get foldDepth =>
+      _setting.get(SettingBoxKey.foldDepth, defaultValue: 0);
+
+  static bool get showRefreshFAB =>
+      _setting.get(SettingBoxKey.showRefreshFAB, defaultValue: true);
+
+  static bool get cachePlayInfo =>
+      _setting.get(SettingBoxKey.cachePlayInfo, defaultValue: true);
 }

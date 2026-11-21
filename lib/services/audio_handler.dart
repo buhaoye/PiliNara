@@ -12,23 +12,37 @@ import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
+import 'package:PiliPlus/pages/live_room/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/local/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/pgc/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
+import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_service_mpris/audio_service_mpris.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_instance/src/extension_instance.dart';
+import 'package:jni/jni.dart' show JStringExtension;
 import 'package:path/path.dart' as path;
 
 Future<VideoPlayerServiceHandler> initAudioService() {
+  if (Platform.isLinux) {
+    AudioServiceMpris.init(
+      dBusName: 'com.example.pilinara.audio',
+      identity: Constants.appName,
+      desktopEntry: 'com.example.pilinara',
+      canGoNext: true,
+      canGoPrevious: true,
+      canPlay: true,
+      canPause: true,
+      canControl: true,
+    );
+  }
   return AudioService.init(
     builder: VideoPlayerServiceHandler.new,
     config: const AudioServiceConfig(
@@ -52,9 +66,29 @@ typedef _StatusConfig = (
 );
 
 class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
+  VideoPlayerServiceHandler() {
+    // Android 14 dispatches volume keys from the activity straight to the
+    // session without checking canHandleVolumeKey(), so a FIXED remote
+    // session swallows them there. Only verified to fall back on Android 16.
+    if (Platform.isAndroid && DeviceUtils.sdkInt >= 36) {
+      final jStr = AndroidHelper.manufacturer();
+      if (jStr != null &&
+          jStr.toDartString(releaseOriginal: true).toLowerCase() == 'vivo') {
+        androidPlaybackInfo.add(
+          RemoteAndroidPlaybackInfo(
+            volumeControlType: .fixed,
+            maxVolume: 100,
+            volume: 50,
+          ),
+        );
+      }
+    }
+  }
+
   static final List<MediaItem> _item = [];
   bool enableBackgroundPlay = Pref.enableBackgroundPlay;
 
+  bool Function()? isPlaying;
   Future<void>? Function()? onPlay;
   Future<void>? Function()? onPause;
   Future<void>? Function(Duration position)? onSeek;
@@ -63,6 +97,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   String? currentHeroTag;
 
   void _clearCallbacks() {
+    isPlaying = null;
     onPlay = null;
     onPause = null;
     onSeek = null;
@@ -205,8 +240,24 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> seek(Duration position) {
     return onSeek?.call(position) ??
-        PlPlayerController.seekToIfExists(position, isSeek: false) ??
+        PlPlayerController.seekToIfExists(position) ??
         Future.syncValue(null);
+  }
+
+  @override
+  Future<dynamic> customAction(String name, [Map<String, dynamic>? extras]) {
+    try {
+      switch (name) {
+        case 'ACTION_DM':
+          final tag = PlPlayerController.playOwner!.tag;
+          Get.find<LiveRoomController>(tag: tag).toggleDanmaku();
+        case 'ACTION_REFRESH':
+          final tag = PlPlayerController.playOwner!.tag;
+          Get.find<LiveRoomController>(tag: tag).queryLiveUrl();
+        default:
+      }
+    } catch (_) {}
+    return Future.syncValue(null);
   }
 
   void setMediaItem(MediaItem newMediaItem) {
@@ -307,24 +358,13 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     final hasEpisodes = _hasEpisodes();
 
     final controls = <MediaControl>[
+      if (isLive) _refresh,
       if (!isLive && hasEpisodes) MediaControl.skipToPrevious,
-      if (!isLive)
-        MediaControl.rewind.copyWith(
-          androidIcon: 'drawable/ic_player_rewind_10s',
-        ),
-      if (playing)
-        MediaControl.pause.copyWith(
-          androidIcon: 'drawable/ic_player_pause',
-        )
-      else
-        MediaControl.play.copyWith(
-          androidIcon: 'drawable/ic_player_play',
-        ),
-      if (!isLive)
-        MediaControl.fastForward.copyWith(
-          androidIcon: 'drawable/ic_player_fast_forward_10s',
-        ),
+      if (!isLive) _rewind,
+      if (playing) _pause else _play,
+      if (!isLive) _fastForward,
       if (!isLive && hasEpisodes) MediaControl.skipToNext,
+      if (isLive) _dm,
     ];
 
     int playPauseIndex = controls.indexWhere(
@@ -498,3 +538,41 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     _clearCurrentSession();
   }
 }
+
+const _refresh = MediaControl(
+  androidIcon: 'drawable/ic_player_refresh',
+  label: 'Refresh',
+  action: .custom,
+  customAction: CustomMediaAction(name: 'ACTION_REFRESH'),
+);
+
+const _dm = MediaControl(
+  androidIcon: 'drawable/ic_state_danmaku',
+  label: 'Danmaku',
+  action: .custom,
+  customAction: CustomMediaAction(name: 'ACTION_DM'),
+);
+
+const _play = MediaControl(
+  androidIcon: 'drawable/ic_player_play',
+  label: 'Play',
+  action: .play,
+);
+
+const _pause = MediaControl(
+  androidIcon: 'drawable/ic_player_pause',
+  label: 'Pause',
+  action: .pause,
+);
+
+const _rewind = MediaControl(
+  androidIcon: 'drawable/ic_player_rewind_10s',
+  label: 'Rewind',
+  action: .rewind,
+);
+
+const _fastForward = MediaControl(
+  androidIcon: 'drawable/ic_player_fast_forward_10s',
+  label: 'Fast Forward',
+  action: .fastForward,
+);

@@ -48,7 +48,7 @@ class _SettingPageState extends State<SettingPage> {
   static const List<_SettingsModel> _items = [
     _SettingsModel(
       type: .privacySetting,
-      subtitle: '黑名单',
+      subtitle: '账号、黑名单',
       icon: Icon(Icons.privacy_tip_outlined),
     ),
     _SettingsModel(
@@ -59,7 +59,7 @@ class _SettingPageState extends State<SettingPage> {
     _SettingsModel(
       type: .dynamicsSetting,
       subtitle: '动态展示、关键词过滤、屏蔽用户、带货动态屏蔽',
-      icon: Icon(Icons.dynamic_feed_outlined),
+      icon: Icon(CustomIcons.motion_photos_on_outlined),
     ),
     _SettingsModel(
       type: .videoSetting,

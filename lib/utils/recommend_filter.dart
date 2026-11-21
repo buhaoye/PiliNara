@@ -13,16 +13,12 @@ abstract final class RecommendFilter {
   static bool applyFilterToRankVideos = Pref.applyFilterToRankVideos;
   static bool applyFilterToSearch = Pref.applyFilterToSearch;
 
-  static RegExp rcmdRegExp = RegExp(
-    Pref.parseBanWordToRegex(Pref.banWordForRecommend),
-    caseSensitive: false,
+  static List<RegExp> rcmdRegExp = Pref.compileBanWord(Pref.banWordForRecommend);
+  static bool enableFilter = rcmdRegExp.isNotEmpty;
+  static List<RegExp> rcmdUpNameRegExp = Pref.compileBanWord(
+    Pref.banWordForRecommendUpName,
   );
-  static bool enableFilter = rcmdRegExp.pattern.isNotEmpty;
-  static RegExp rcmdUpNameRegExp = RegExp(
-    Pref.parseBanWordToRegex(Pref.banWordForRecommendUpName),
-    caseSensitive: false,
-  );
-  static bool enableUpNameFilter = rcmdUpNameRegExp.pattern.isNotEmpty;
+  static bool enableUpNameFilter = rcmdUpNameRegExp.isNotEmpty;
   static Map<int, String> recommendBlockedMids = Pref.recommendBlockedMids;
 
   static bool isWhitelisted(int? mid) {
@@ -87,11 +83,10 @@ abstract final class RecommendFilter {
   }
 
   /// 视频标签关键词过滤（标签黑名单）
-  static RegExp videoTagRegExp = RegExp(
-    Pref.parseBanWordToRegex(Pref.banWordForVideoTag),
-    caseSensitive: false,
+  static List<RegExp> videoTagRegExp = Pref.compileBanWord(
+    Pref.banWordForVideoTag,
   );
-  static bool enableVideoTagFilter = videoTagRegExp.pattern.isNotEmpty;
+  static bool enableVideoTagFilter = videoTagRegExp.isNotEmpty;
 
   /// bvid -> 标签名列表（会话内 LRU 缓存，命中后移到表尾）
   static final Map<String, List<String>> _videoTagCache = {};

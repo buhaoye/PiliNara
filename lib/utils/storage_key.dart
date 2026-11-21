@@ -66,6 +66,8 @@ abstract final class SettingBoxKey {
       autoAudioOnlyInBackground = 'autoAudioOnlyInBackground',
       appRcmd = 'appRcmd',
       rcmdMode = 'rcmdMode',
+      rcmdSource = 'rcmdSource',
+      rcmdSources = 'rcmdSources',
       enableSaveLastData = 'enableSaveLastData',
       minDurationForRcmd = 'minDurationForRcmd',
       minPlayForRcmd = 'minPlayForRcmd',
@@ -162,6 +164,7 @@ abstract final class SettingBoxKey {
       showDynActionBar = 'showDynActionBar',
       darkVideoPage = 'darkVideoPage',
       enableSlideVolumeBrightness = 'enableSlideVolumeBrightness',
+      enableScrollVolume = 'enableScrollVolume',
       enableSlideFS = 'enableSlideFS',
       retryCount = 'retryCount',
       retryDelay = 'retryDelay',
@@ -192,6 +195,7 @@ abstract final class SettingBoxKey {
       appVolume = 'appVolume',
       enableVolumeBoost = 'enableVolumeBoost',
       downloadPath = 'downloadPath',
+      cachePlayInfo = 'cachePlayInfo',
       imageSavePath = 'imageSavePath',
       followOrderType = 'followOrderType',
       enableImgMenu = 'enableImgMenu',
@@ -209,7 +213,8 @@ abstract final class SettingBoxKey {
       buvid = 'buvid',
       blockAtOnlyReply = 'blockAtOnlyReply',
       blockReplyAtCount = 'blockReplyAtCount',
-      filterIntro = 'filterIntro';
+      filterIntro = 'filterIntro',
+      showRefreshFAB = 'showRefreshFAB';
 
   static const String enableAiChat = 'enableAiChat',
       aiApiUrl = 'aiApiUrl',
@@ -220,6 +225,10 @@ abstract final class SettingBoxKey {
       aiPromptTemplates = 'aiPromptTemplates',
       aiAutoScroll = 'aiAutoScroll',
       aiReasoningEffort = 'aiReasoningEffort';
+
+  static const String enableFullScreenSC = 'enableFullScreenSC',
+      fullScreenSCOpacity = 'fullScreenSCOpacity',
+      fullScreenSCScale = 'fullScreenSCScale';
 
   static const String minimizeOnExit = 'minimizeOnExit',
       windowSize = 'windowSize',
@@ -321,6 +330,7 @@ abstract final class SettingBoxKey {
       useSideBar = 'useSideBar',
       autoSideBar = 'autoSideBar',
       sideBarThreshold = 'sideBarThreshold',
+      hideSideBarLabel = 'hideSideBarLabel',
       enableMYBar = 'enableMYBar',
       enableGradientBg = 'enableGradientBg',
       hideTopBar = 'hideSearchBar',
@@ -338,6 +348,7 @@ abstract final class SettingBoxKey {
       liveCdnUrl = 'liveCdnUrl',
       saveReply = 'saveReply',
       swapReplyLikeDislike = 'swapReplyLikeDislike',
+      foldDepth = 'foldDepth',
       remarkReplaceName = 'remarkReplaceName',
       appFont = 'appFont',
       customAppFont = 'customAppFont',

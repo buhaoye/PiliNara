@@ -92,6 +92,14 @@ List<SettingsModel> get styleSettings => [
     defaultVal: false,
     onTap: _showSideBarThresholdDialog,
   ),
+  const SwitchModel(
+    title: '隐藏侧边栏文字',
+    subtitle: '仅显示图标，减少侧边栏占用宽度',
+    leading: Icon(Icons.label_off_outlined),
+    setKey: SettingBoxKey.hideSideBarLabel,
+    defaultVal: false,
+    needReboot: true,
+  ),
   NormalModel(
     title: 'App字体设置',
     subtitle: '点击设置',
@@ -111,6 +119,14 @@ List<SettingsModel> get styleSettings => [
     defaultVal: false,
     needReboot: true,
   ),
+  if (PlatformUtils.isDesktop)
+    const SwitchModel(
+      title: '首页显示刷新按钮',
+      leading: Icon(Icons.refresh),
+      setKey: SettingBoxKey.showRefreshFAB,
+      defaultVal: true,
+      needReboot: true,
+    ),
   NormalModel(
     title: '页面过渡动画',
     leading: const Icon(Icons.animation),

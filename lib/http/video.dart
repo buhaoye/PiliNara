@@ -355,8 +355,8 @@ abstract final class VideoHttp {
       'gaia_source': 'pre-load',
       'isGaiaAvoided': true,
       'web_location': 1315873,
-      if (videoType != .ugc && !fallback) ...{
-        'biz_type': ?videoType.bizType,
+      if (videoType.bizType case final bizType? when !fallback) ...{
+        'biz_type': bizType,
         'scene': 'normal',
         'from_client': 'BROWSER',
         'drm_tech_type': 0,
@@ -384,7 +384,7 @@ abstract final class VideoHttp {
             data = PlayUrlModel.fromJson(res.data['data']);
 
           // ogv
-          case .pgc || .pugv when !fallback:
+          case .pugv when !fallback:
             final result = res.data['data'];
             final videoInfo = result['video_info'];
             if (videoInfo != null) {
@@ -420,9 +420,13 @@ abstract final class VideoHttp {
 
           case .pgc:
             final result = res.data['result'];
-            data = PlayUrlModel.fromJson(result['video_info'])
-              ..lastPlayTime =
-                  result['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
+            if (result['video_info'] case final Map<String, dynamic> info) {
+              data = PlayUrlModel.fromJson(info)
+                ..lastPlayTime =
+                    result['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
+            } else {
+              data = PlayUrlModel.fromJson(result);
+            }
 
           case .pugv:
             final result = res.data['data'];

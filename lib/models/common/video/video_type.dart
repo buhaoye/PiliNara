@@ -8,9 +8,8 @@ enum VideoType {
   ),
   pgc(
     type: 4,
-    api: Api.ogvUrl,
+    api: Api.pgcUrl,
     fallbackApi: Api.pgcUrl,
-    bizType: 'ogv',
   ),
   pugv(
     type: 10,
